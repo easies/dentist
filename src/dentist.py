@@ -17,7 +17,6 @@ class Poller(object):
     def register_file_watcher(self, fw):
         self.poller.register(fw.file, select.POLLIN)
         self.all[fw.file.fileno()] = fw
-        fw.poller = self
 
     def unregister(self, fw):
         del self.all[fw.file.fileno()]
@@ -28,7 +27,7 @@ class Poller(object):
             for fd, event in self.poller.poll():
                 if event & select.POLLIN:
                     self.all[fd].read_line()
-        except:
+        except select.error:
             pass
 
 
@@ -43,28 +42,36 @@ class DirWatcher(object):
         self.dir = os.open(path, os.O_RDONLY)
         fcntl.fcntl(self.dir, fcntl.F_SETSIG, 0)
         fcntl.fcntl(self.dir, fcntl.F_NOTIFY,
-                    fcntl.DN_MODIFY | fcntl.DN_MULTISHOT)
+                    (fcntl.DN_MODIFY | fcntl.DN_DELETE | fcntl.DN_RENAME |
+                     fcntl.DN_CREATE | fcntl.DN_MULTISHOT))
         self.fws = fws
 
     def handler(self, signum, frame):
-        logging.debug(frame)
-        logging.debug(dir(frame))
+        #logging.debug(frame)
+        #logging.debug(dir(frame))
         logging.debug(signum)
 
         # XXX queue this action
         for fw in self.fws:
-            if not fw.enabled:
-                fw.reenable()
+            fw.check()
 
 
 class FileWatcher(object):
 
-    def __init__(self, path, reader):
-        self.file = open(path, 'rb')
+    def __init__(self, path, reader, poller):
+        self.path = os.path.abspath(path)
+        self.enabled = True
+        try:
+            self.file = open(self.path, 'rb')
+        except IOError:
+            self.file = None
+            self.enabled = False
         self.reader = reader
         self.last = 0
-        self.enabled = True
-        self.poller = None
+        self.poller = poller
+        self.check()
+        if self.enabled:
+            self.poller.register_file_watcher(self)
 
     def read_line(self):
         if not self.enabled:
@@ -72,13 +79,13 @@ class FileWatcher(object):
         self.last = self.file.tell()
         line = self.file.readline()
         if not line:
+            # EOF
+            logging.debug('EOF encountered, disabling.')
             self.enabled = False
             self.poller.unregister(self)
-#            time.sleep(0.1)
-#            self.file.seek(0, os.SEEK_END)
             return
 
-        logging.debug(line)
+        logging.debug('line: %s' % line.strip())
 
         user = self.reader.check_line(line)
         if user is not None:
@@ -87,14 +94,33 @@ class FileWatcher(object):
     def write_to_user(self, user, line):
         #logging.debug('Writing to %s : %s' % (user, line))
         pass
-    
-    def reenable(self):
-        self.enabled = True
-        st = os.fstat(self.file.fileno())
+
+    def check(self):
+        try:
+            st = os.stat(self.path)
+        except OSError:
+            try:
+                self.file.close()
+            except:
+                pass
+            self.file = None
+            self.last = 0
+            self.enabled = False
+            return
+        
+        if self.file is None:
+            self.file = open(self.path, 'rb')
+            self.last = 0
+            self.enabled = False
+
         if st.st_size < self.last:
             self.last = 0
+
         self.file.seek(self.last)
-        self.poller.register_file_watcher(self)
+
+        if not self.enabled:
+            self.poller.register_file_watcher(self)
+            self.enabled = True
 
 
 class CombinedLogReader(object):
