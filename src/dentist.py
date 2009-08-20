@@ -1,6 +1,60 @@
 import re
 import pwd
 import logging
+import select
+import time
+import fcntl
+import signal
+import os
+
+
+class Poller(object):
+
+    def __init__(self):
+        self.poller = select.poll()
+        self.all = {}
+
+    def register_file_watcher(self, fw):
+        self.poller.register(fw.file, select.POLLIN)
+        self.all[fw.file.fileno()] = fw
+        fw.poller = self
+
+    def unregister(self, fw):
+        del self.all[fw.file.fileno()]
+        self.poller.unregister(fw.file)
+
+    def poll(self):
+        try:
+            for fd, event in self.poller.poll():
+                if event & select.POLLIN:
+                    self.all[fd].read_line()
+        except:
+            pass
+
+
+class DirWatcher(object):
+    signal_registered = False
+
+    def __init__(self, path, fws):
+        if not self.__class__.signal_registered:
+            self.__class__.signal_registered = True
+            signal.signal(signal.SIGIO, self.handler)
+
+        self.dir = os.open(path, os.O_RDONLY)
+        fcntl.fcntl(self.dir, fcntl.F_SETSIG, 0)
+        fcntl.fcntl(self.dir, fcntl.F_NOTIFY,
+                    fcntl.DN_MODIFY | fcntl.DN_MULTISHOT)
+        self.fws = fws
+
+    def handler(self, signum, frame):
+        logging.debug(frame)
+        logging.debug(dir(frame))
+        logging.debug(signum)
+
+        # XXX queue this action
+        for fw in self.fws:
+            if not fw.enabled:
+                fw.reenable()
 
 
 class FileWatcher(object):
@@ -8,16 +62,39 @@ class FileWatcher(object):
     def __init__(self, path, reader):
         self.file = open(path, 'rb')
         self.reader = reader
+        self.last = 0
+        self.enabled = True
+        self.poller = None
 
     def read_line(self):
+        if not self.enabled:
+            return
+        self.last = self.file.tell()
         line = self.file.readline()
+        if not line:
+            self.enabled = False
+            self.poller.unregister(self)
+#            time.sleep(0.1)
+#            self.file.seek(0, os.SEEK_END)
+            return
+
+        logging.debug(line)
+
         user = self.reader.check_line(line)
         if user is not None:
             self.write_to_user(user, line)
 
     def write_to_user(self, user, line):
-        logging.debug('Writing to %s : %s' % (user, line))
+        #logging.debug('Writing to %s : %s' % (user, line))
         pass
+    
+    def reenable(self):
+        self.enabled = True
+        st = os.fstat(self.file.fileno())
+        if st.st_size < self.last:
+            self.last = 0
+        self.file.seek(self.last)
+        self.poller.register_file_watcher(self)
 
 
 class CombinedLogReader(object):
