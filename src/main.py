@@ -16,6 +16,9 @@ def parse():
                       action='append', default=[])
     parser.add_option('-e', '--error_log', dest='error_logs',
                       action='append', default=[])
+    parser.add_option('-p', '--parent_user_dir', dest='parent_user_dir',
+                      default='/home')
+    parser.add_option('-o', '--output_dir', dest='output_dir')
 
     return parser.parse_args()
 
@@ -34,7 +37,9 @@ def main():
 
     logging.basicConfig(level=logging.DEBUG)
     poller = dentist.Poller()
-    clr = dentist.CombinedLogReader()
+    clr = dentist.CombinedLogReader
+    elr = dentist.ErrorLogReader
+    elr.configure(homedir_root=options.parent_user_dir)
 
     fws = []
     for f in access_logs:

@@ -88,7 +88,7 @@ class FileWatcher(object):
         logging.debug('line: %s' % line.strip())
 
         user = self.reader.check_line(line)
-        if user is not None:
+        if user:
             self.write_to_user(user, line)
 
     def write_to_user(self, user, line):
@@ -123,7 +123,25 @@ class FileWatcher(object):
             self.enabled = True
 
 
-class CombinedLogReader(object):
+class LogReader(object):
+
+    @classmethod
+    def get_info(cls, user):
+        """
+        >>> pwd.getpwnam('root') is not None
+        True
+        """
+        try:
+            return pwd.getpwnam(user)
+        except KeyError:
+            return None
+
+    @classmethod
+    def check_line(cls, line):
+        raise NotImplementedError
+
+
+class CombinedLogReader(LogReader):
     """Parse Apache logs in the combined format.
     "%h %l %u %t \\"%r\\" %>s %b \\"%{Referer}i\\" \\"%{User-agent}i\\"
     """
@@ -145,8 +163,7 @@ class CombinedLogReader(object):
         if uri is not None:
            user = cls.parse_user(uri)
            if user is not None:
-               if cls.user_exists(user):
-                   return user
+               return cls.get_info(user)
 
     @classmethod
     def parse_uri(cls, line):
@@ -178,13 +195,28 @@ class CombinedLogReader(object):
             y = x.split('/', 1)
             return y[0]
 
+
+class ErrorLogReader(LogReader):
+    HOMEDIR_ROOT = '/home'
+    HOMEDIR_ROOT_LEN = len(HOMEDIR_ROOT)
+
     @classmethod
-    def user_exists(cls, user):
+    def configure(cls, **kwargs):
         try:
-            pwent = pwd.getpwnam(user)
-            return True
+            HOMEDIR_ROOT = kwargs['homedir_root']
+            HOMEDIR_ROOT_LEN = len(HOMEDIR_ROOT)
         except KeyError:
-            return False
+            pass
+
+    @classmethod
+    def check_line(cls, line):
+        index = line.find(HOMEDIR_ROOT)
+        if index < 0:
+            return
+
+        index += HOMEDIR_ROOT_LEN
+        user = line[index:].split('/', 1)[0].split(' ')[0]
+        return cls.get_info(user)
 
 
 if __name__ == '__main__':
