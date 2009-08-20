@@ -1,22 +1,6 @@
 import re
 import pwd
-import select
 import logging
-
-
-class Epoller(object):
-
-    def __init__(self):
-        self.poller = select.epoll()
-        self.all = {}
-
-    def register_file_watcher(self, fw):
-        self.poller.register(fw.file.fileno(), select.EPOLLIN)
-        self.all[fw.file.fileno()] = fw
-
-    def poll(self):
-        for event, fd in self.poller.poll():
-            self.all[fd].read_line()
 
 
 class FileWatcher(object):
@@ -31,7 +15,7 @@ class FileWatcher(object):
         if user is not None:
             self.write_to_user(user, line)
 
-    def write_to_user(self, user, line)
+    def write_to_user(self, user, line):
         logging.debug('Writing to %s : %s' % (user, line))
         pass
 
@@ -52,17 +36,18 @@ class CombinedLogReader(object):
     REGEX = r'^([^ ]+) ([^ ]+) ([^ ]+) \[([^]]+)\] "([^ ]+) ([^ ]+) ([^ ]+)" ?(.*)$'
     REGEX_C = re.compile(REGEX)
 
-    def check_line(self, line):
-        uri = self.parse_uri(line)
+    @classmethod
+    def check_line(cls, line):
+        uri = cls.parse_uri(line)
         if uri is not None:
-           user = self.parse_user(uri)
+           user = cls.parse_user(uri)
            if user is not None:
-               if self.user_exists(user):
+               if cls.user_exists(user):
                    return user
 
     @classmethod
-    def parse_uri(self, line):
-        m = REGEX_C.match(line)
+    def parse_uri(cls, line):
+        m = cls.REGEX_C.match(line)
         if m is not None:
             uri = m.group(6)
             return uri
