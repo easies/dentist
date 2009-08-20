@@ -19,8 +19,12 @@ class Poller(object):
         self.all[fw.file.fileno()] = fw
 
     def unregister(self, fw):
-        del self.all[fw.file.fileno()]
-        self.poller.unregister(fw.file)
+        try:
+            self.poller.unregister(fw.file)
+            del self.all[fw.file.fileno()]
+        except KeyError:
+            # ignore fd's that weren't registered in the first place.
+            pass
 
     def poll(self):
         try:
@@ -176,6 +180,8 @@ class CombinedLogReader(LogReader):
     def parse_user(cls, uri):
         """
         >>> clr = CombinedLogReader()
+        >>> clr.parse_user('/')
+        >>> clr.parse_user('/otherstuff')
         >>> clr.parse_user('/home/abc')
         'abc'
         >>> clr.parse_user('/home/abc/index.html')
@@ -184,8 +190,6 @@ class CombinedLogReader(LogReader):
         'abc'
         >>> clr.parse_user('/~abc/index.html')
         'abc'
-        >>> clr.parse_user('/')
-        >>> clr.parse_user('/otherstuff')
         """
         if uri.startswith('/home/'):
             user = uri.split('/', 3)[2]
@@ -202,9 +206,19 @@ class ErrorLogReader(LogReader):
 
     @classmethod
     def configure(cls, **kwargs):
+        """
+        >>> ErrorLogReader.HOMEDIR_ROOT
+        '/home'
+        >>> ErrorLogReader.configure()
+        >>> ErrorLogReader.HOMEDIR_ROOT
+        '/home'
+        >>> ErrorLogReader.configure(homedir_root='/other/home')
+        >>> ErrorLogReader.HOMEDIR_ROOT
+        '/other/home'
+        """
         try:
-            HOMEDIR_ROOT = kwargs['homedir_root']
-            HOMEDIR_ROOT_LEN = len(HOMEDIR_ROOT)
+            cls.HOMEDIR_ROOT = kwargs['homedir_root']
+            cls.HOMEDIR_ROOT_LEN = len(cls.HOMEDIR_ROOT)
         except KeyError:
             pass
 
