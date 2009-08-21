@@ -30,9 +30,11 @@ class Poller(object):
         try:
             for fd, event in self.poller.poll():
                 if event & select.POLLIN:
+                    logging.debug('ready for %d' % fd)
                     self.all[fd].read_line()
-        except select.error:
-            pass
+        except select.error, e:
+            if e[0] != 4:
+                raise
 
 
 class DirWatcher(object):
@@ -81,6 +83,7 @@ class FileWatcher(object):
             self.enabled = False
         self.reader = reader
         self.last = 0
+        self.current = 0
         self.poller = poller
         self.check()
         if self.enabled:
@@ -89,9 +92,13 @@ class FileWatcher(object):
     def read_line(self):
         if not self.enabled:
             return
-        self.last = self.file.tell()
+        self.last = self.current
         line = self.file.readline()
-        if not line:
+        self.current = self.file.tell()
+
+        logging.debug('%d %d' % (self.last, self.current))
+
+        if not line or self.current == self.last:
             # EOF
             logging.debug('EOF encountered, disabling.')
             self.enabled = False
@@ -102,34 +109,56 @@ class FileWatcher(object):
 
         user = self.reader.check_line(line)
         if user:
-            self.write_to_user(user, line)
+            self.write_to_user(user, line, self.path)
 
-    def write_to_user(self, user, line):
-        #logging.debug('Writing to %s : %s' % (user, line))
-        pass
+    def write_to_user(self, user, line, path):
+        logging.debug('Writing to %s : %s' % (user.pw_name, line))
+        dir_name = os.path.dirname(path)
+        basename = os.path.basename(path)
+        userpath = os.path.join(dir_name, '%s_%s' % (user.pw_name, basename))
+        
+        # XXX cache/poll the open files?
+        open(userpath, 'a').write(line)
+        
+        logging.debug('Written to %s' % user.pw_name)
+
+    def disable(self):
+        try:
+            self.file.close()
+        except (OSError, AttributeError):
+            pass
+        self.file = None
+        self.current = 0
+        self.last = 0
+        self.enabled = False
+
+    def enable(self):
+        self.file = open(self.path, 'rb')
+        self.poller.register_file_watcher(self)
+        self.current = 0
+        self.last = 0
+        self.enabled = True
 
     def check(self):
         try:
+            # Check if the file exists.
             st = os.stat(self.path)
         except OSError:
-            try:
-                self.file.close()
-            except:
-                pass
-            self.file = None
-            self.last = 0
-            self.enabled = False
+            # The file does not exist, disable.
+            self.disable()
             return
-        
+
         if self.file is None:
-            self.file = open(self.path, 'rb')
-            self.last = 0
-            self.enabled = False
+            logging.debug('New file %s, enabling.' % self.path)
+            self.enable()
+            return
 
         if st.st_size < self.last:
+            logging.debug('File %s shrunk, rewinding.' % self.path)
+            self.current = 0
             self.last = 0
 
-        self.file.seek(self.last)
+        self.file.seek(self.current)
 
         if not self.enabled:
             self.poller.register_file_watcher(self)
@@ -137,6 +166,11 @@ class FileWatcher(object):
 
 
 class LogReader(object):
+    output_directory = '/tmp'
+
+    @classmethod
+    def set_output_directory(cls, path):
+        cls.output_directory = path
 
     @classmethod
     def get_info(cls, user):
@@ -198,13 +232,16 @@ class CombinedLogReader(LogReader):
         >>> clr.parse_user('')
         >>> clr.parse_user('/')
         >>> clr.parse_user('/otherstuff')
-        >>> clr.parse_user('/home/abc')
-        'abc'
-        >>> clr.parse_user('/home/abc/index.html')
-        'abc'
         >>> clr.parse_user('/~abc')
         'abc'
         >>> clr.parse_user('/~abc/index.html')
+        'abc'
+        >>> clr.parse_user('/home/abc')
+        >>> clr.parse_user('/home/abc/index.html')
+        >>> clr.add_prefix('/home/')
+        >>> clr.parse_user('/home/abc')
+        'abc'
+        >>> clr.parse_user('/home/abc/index.html')
         'abc'
         """
         for p in cls.prefixes:

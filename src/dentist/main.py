@@ -9,8 +9,8 @@ import sys
 def parse():
     from optparse import OptionParser
     parser = OptionParser()
-    parser.add_option('-d', '--nodaemonize', dest='nodaemonize',
-                      action='store_false', default=True)
+    parser.add_option('-d', '--daemonize', dest='daemonize',
+                      action='store_true', default=False)
     parser.add_option('-a', '--access_log', dest='access_logs',
                       action='append', default=[])
     parser.add_option('-p', '--home-prefix', dest='prefixes',
@@ -19,7 +19,8 @@ def parse():
                       action='append', default=[])
     parser.add_option('-u', '--parent_user_dir', dest='parent_user_dir',
                       default='/home')
-    parser.add_option('-o', '--output_dir', dest='output_dir')
+    parser.add_option('-o', '--output_dir', dest='output_dir',
+                      default=None)
     return parser.parse_args()
 
 
@@ -41,6 +42,9 @@ def main():
     error_logs = map(os.path.abspath, error_logs)
     error_logs = set(error_logs)
 
+    if not options.output_dir:
+        dentist.LogReader.set_output_directory(options.output_dir)
+
     poller = dentist.Poller()
     clr = dentist.CombinedLogReader
     clr.add_prefix(*options.prefixes)
@@ -58,8 +62,9 @@ def main():
 
     dw = dentist.DirWatcher(directories, fws)
     
-    if not options.nodaemonize:
-        pass
+    if options.daemonize:
+        from daemonize import daemonize
+        daemonize()
 
     try:
         while True:
