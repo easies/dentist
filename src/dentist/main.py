@@ -21,13 +21,23 @@ def parse():
                       default='/home')
     parser.add_option('-o', '--output_dir', dest='output_dir',
                       default=None)
+    parser.add_option('-l', '--log_file', dest='log_file', metavar='PATH',
+                      default=None)
     return parser.parse_args()
 
 
 def main():
-    logging.basicConfig(level=logging.DEBUG)
-
     options, args = parse()
+
+    log_kwargs = {
+        'level': logging.DEBUG,
+        'format': '%(asctime)-15s %(levelname)-8s %(message)s',
+    }
+
+    if options.log_file is not None:
+        log_kwargs['filename'] = options.log_file
+
+    logging.basicConfig(**log_kwargs)
 
     access_logs = options.access_logs
     error_logs = options.error_logs
@@ -70,6 +80,7 @@ def main():
         while True:
             poller.poll()
     except KeyboardInterrupt:
+        logging.shutdown()
         return 0
 
 

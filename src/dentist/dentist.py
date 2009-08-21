@@ -208,6 +208,16 @@ class CombinedLogReader(LogReader):
 
     @classmethod
     def add_prefix(cls, *args):
+        """
+        >>> cls = CombinedLogReader
+        >>> '/~' in cls.prefixes
+        True
+        >>> cls.add_prefix('abc', 'xyz')
+        >>> 'abc' in cls.prefixes
+        True
+        >>> 'xyz' in cls.prefixes
+        True
+        """
         cls.prefixes += args
 
     @classmethod
