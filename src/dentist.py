@@ -38,23 +38,32 @@ class Poller(object):
 class DirWatcher(object):
     signal_registered = False
 
-    def __init__(self, path, fws):
+    def __init__(self, paths, fws=None):
         if not self.__class__.signal_registered:
             self.__class__.signal_registered = True
             signal.signal(signal.SIGIO, self.handler)
 
-        self.dir = os.open(path, os.O_RDONLY)
-        fcntl.fcntl(self.dir, fcntl.F_SETSIG, 0)
-        fcntl.fcntl(self.dir, fcntl.F_NOTIFY,
-                    (fcntl.DN_MODIFY | fcntl.DN_DELETE | fcntl.DN_RENAME |
-                     fcntl.DN_CREATE | fcntl.DN_MULTISHOT))
-        self.fws = fws
+        self.directories = []
+
+        # Watch all given directories for changes.
+        for path in paths:
+            d = os.open(path, os.O_RDONLY)
+            self.directories.append(d)
+            fcntl.fcntl(d, fcntl.F_SETSIG, 0)
+            fcntl.fcntl(d, fcntl.F_NOTIFY,
+                        (fcntl.DN_MODIFY | fcntl.DN_DELETE | fcntl.DN_RENAME |
+                         fcntl.DN_CREATE | fcntl.DN_MULTISHOT))
+
+        if fws is not None:
+            self.fws = fws
+        else:
+            self.fws = []
+
+    def add_file_watcher(self, fw):
+        self.fws.append(fw)
 
     def handler(self, signum, frame):
-        #logging.debug(frame)
-        #logging.debug(dir(frame))
-        logging.debug(signum)
-
+        logging.debug('A file changed.')
         # XXX queue this action
         for fw in self.fws:
             fw.check()
@@ -149,7 +158,7 @@ class CombinedLogReader(LogReader):
     """Parse Apache logs in the combined format.
     "%h %l %u %t \\"%r\\" %>s %b \\"%{Referer}i\\" \\"%{User-agent}i\\"
     """
-    
+
     # 1 = Remote host
     # 2 = remote ident
     # 3 = ?
@@ -158,8 +167,14 @@ class CombinedLogReader(LogReader):
     # 6 = URI
     # 7 = HTTP version
     # 8 = Rest
-    REGEX = r'^([^ ]+) ([^ ]+) ([^ ]+) \[([^]]+)\] "([^ ]+) ([^ ]+) ([^ ]+)" ?(.*)$'
+    REGEX = (r'^([^ ]+) ([^ ]+) ([^ ]+) \[([^]]+)\] '
+             r'"([^ ]+) ([^ ]+) ([^ ]+)" ?(.*)$')
     REGEX_C = re.compile(REGEX)
+    prefixes = ['/~']
+
+    @classmethod
+    def add_prefix(cls, *args):
+        cls.prefixes += args
 
     @classmethod
     def check_line(cls, line):
@@ -180,6 +195,7 @@ class CombinedLogReader(LogReader):
     def parse_user(cls, uri):
         """
         >>> clr = CombinedLogReader()
+        >>> clr.parse_user('')
         >>> clr.parse_user('/')
         >>> clr.parse_user('/otherstuff')
         >>> clr.parse_user('/home/abc')
@@ -191,13 +207,10 @@ class CombinedLogReader(LogReader):
         >>> clr.parse_user('/~abc/index.html')
         'abc'
         """
-        if uri.startswith('/home/'):
-            user = uri.split('/', 3)[2]
-            return user
-        if uri.startswith('/~'):
-            x = uri.split('~', 1)[1]
-            y = x.split('/', 1)
-            return y[0]
+        for p in cls.prefixes:
+            if uri.startswith(p):
+                s = uri[len(p):]
+                return s.split('/', 1)[0]
 
 
 class ErrorLogReader(LogReader):

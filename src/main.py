@@ -2,59 +2,71 @@
 
 import dentist
 import logging
+import os
+import sys
 
 
 def parse():
     from optparse import OptionParser
     parser = OptionParser()
-    parser.add_option('-n', '--nodaemonize', dest='nodaemonize',
+    parser.add_option('-d', '--nodaemonize', dest='nodaemonize',
                       action='store_false', default=True)
-    parser.add_option('-d', '--directory', dest='directory',
-                      metavar='PATH', help='The directory to watch.',
-                      default='/tmp/lee')
     parser.add_option('-a', '--access_log', dest='access_logs',
+                      action='append', default=[])
+    parser.add_option('-p', '--home-prefix', dest='prefixes',
                       action='append', default=[])
     parser.add_option('-e', '--error_log', dest='error_logs',
                       action='append', default=[])
-    parser.add_option('-p', '--parent_user_dir', dest='parent_user_dir',
+    parser.add_option('-u', '--parent_user_dir', dest='parent_user_dir',
                       default='/home')
     parser.add_option('-o', '--output_dir', dest='output_dir')
-
     return parser.parse_args()
 
 
 def main():
+    logging.basicConfig(level=logging.DEBUG)
+
     options, args = parse()
 
-    directory = options.directory
     access_logs = options.access_logs
     error_logs = options.error_logs
 
-    if len(access_logs) == 0 and len(access_logs) == 0:
-        import sys
-        sys.stderr.write('Must specify at least one log.\n')
-        return
+    if len(access_logs) == 0 and len(error_logs) == 0:
+        sys.stderr.write('You must specify at least one log.\n')
+        return 1
 
-    logging.basicConfig(level=logging.DEBUG)
+    # Make the list into a set, so we don't duplicate
+    access_logs = map(os.path.abspath, access_logs)
+    access_logs = set(access_logs)
+    error_logs = map(os.path.abspath, error_logs)
+    error_logs = set(error_logs)
+
     poller = dentist.Poller()
     clr = dentist.CombinedLogReader
+    clr.add_prefix(*options.prefixes)
     elr = dentist.ErrorLogReader
     elr.configure(homedir_root=options.parent_user_dir)
 
     fws = []
+    directories = set()
     for f in access_logs:
+        directories.add(os.path.dirname(f))
         fws.append(dentist.FileWatcher(f, clr, poller))
     for f in error_logs:
-        pass
-    
-    dw = dentist.DirWatcher(directory, fws)
+        directories.add(os.path.dirname(f))
+        fws.append(dentist.FileWatcher(f, elr, poller))
+
+    dw = dentist.DirWatcher(directories, fws)
     
     if not options.nodaemonize:
         pass
 
-    while True:
-        poller.poll()
+    try:
+        while True:
+            poller.poll()
+    except KeyboardInterrupt:
+        return 0
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())
