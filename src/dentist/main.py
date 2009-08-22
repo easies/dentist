@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import dentist
+from watchers import FileWatcher, DirWatcher, Poller
 import logging
 import os
 import sys
@@ -55,7 +56,7 @@ def main():
     if not options.output_dir:
         dentist.LogReader.set_output_directory(options.output_dir)
 
-    poller = dentist.Poller()
+    poller = Poller()
     clr = dentist.CombinedLogReader
     clr.add_prefix(*options.prefixes)
     elr = dentist.ErrorLogReader
@@ -65,12 +66,12 @@ def main():
     directories = set()
     for f in access_logs:
         directories.add(os.path.dirname(f))
-        fws.append(dentist.FileWatcher(f, clr, poller))
+        fws.append(FileWatcher(f, clr, poller))
     for f in error_logs:
         directories.add(os.path.dirname(f))
-        fws.append(dentist.FileWatcher(f, elr, poller))
+        fws.append(FileWatcher(f, elr, poller))
 
-    dw = dentist.DirWatcher(directories, fws)
+    dw = DirWatcher(directories, fws)
     
     if options.daemonize:
         from daemonize import daemonize
