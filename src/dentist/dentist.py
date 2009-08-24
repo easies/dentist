@@ -101,35 +101,45 @@ class CombinedLogReader(LogReader):
 
 
 class ErrorLogReader(LogReader):
-    HOMEDIR_ROOT = '/home'
+    HOMEDIR_ROOT = '/home/'
     HOMEDIR_ROOT_LEN = len(HOMEDIR_ROOT)
 
     @classmethod
     def configure(cls, **kwargs):
         """
         >>> ErrorLogReader.HOMEDIR_ROOT
-        '/home'
+        '/home/'
         >>> ErrorLogReader.configure()
         >>> ErrorLogReader.HOMEDIR_ROOT
-        '/home'
+        '/home/'
         >>> ErrorLogReader.configure(homedir_root='/other/home')
         >>> ErrorLogReader.HOMEDIR_ROOT
-        '/other/home'
+        '/other/home/'
+        >>> ErrorLogReader.configure(homedir_root='/the/other/home/')
+        >>> ErrorLogReader.HOMEDIR_ROOT
+        '/the/other/home/'
         """
         try:
-            cls.HOMEDIR_ROOT = kwargs['homedir_root']
+            abs = os.path.abspath(kwargs['homedir_root'])
+            cls.HOMEDIR_ROOT = '%s/' % abs
             cls.HOMEDIR_ROOT_LEN = len(cls.HOMEDIR_ROOT)
         except KeyError:
             pass
 
     @classmethod
     def check_line(cls, line):
-        index = line.find(HOMEDIR_ROOT)
+        """
+        >>> ErrorLogReader.check_line('blah /home/root/blah') is not None
+        True
+        >>> ErrorLogReader.check_line('blah /home/root blah') is not None
+        True
+        """
+        index = line.find(cls.HOMEDIR_ROOT)
         if index < 0:
             return
 
-        index += HOMEDIR_ROOT_LEN
-        user = line[index:].split('/', 1)[0].split(' ')[0]
+        index += cls.HOMEDIR_ROOT_LEN
+        user = line[index:].split(' ', 1)[0].split('/', 1)[0]
         return cls.get_info(user)
 
 
