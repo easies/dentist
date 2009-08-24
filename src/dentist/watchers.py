@@ -117,10 +117,10 @@ class FileWatcher(object):
         dir_name = os.path.dirname(path)
         basename = os.path.basename(path)
         userpath = os.path.join(dir_name, '%s_%s' % (user.pw_name, basename))
-        
+
         # XXX cache/poll the open files?
         open(userpath, 'a').write(line)
-        
+
         logging.debug('Written to %s' % user.pw_name)
 
     def disable(self):

@@ -23,7 +23,7 @@ def parse():
     parser.add_option('-o', '--output_dir', dest='output_dir',
                       default=None)
     parser.add_option('-l', '--log_file', dest='log_file', metavar='PATH',
-                      default=None)
+                      default='/var/log/dentist.log')
     return parser.parse_args()
 
 
@@ -72,7 +72,7 @@ def main():
         fws.append(FileWatcher(f, elr, poller))
 
     dw = DirWatcher(directories, fws)
-    
+
     if options.daemonize:
         from daemonize import daemonize
         daemonize()

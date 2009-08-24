@@ -64,9 +64,9 @@ class CombinedLogReader(LogReader):
     def check_line(cls, line):
         uri = cls.parse_uri(line)
         if uri is not None:
-           user = cls.parse_user(uri)
-           if user is not None:
-               return cls.get_info(user)
+            user = cls.parse_user(uri)
+            if user is not None:
+                return cls.get_info(user)
 
     @classmethod
     def parse_uri(cls, line):

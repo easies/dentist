@@ -12,5 +12,5 @@ setup(
     package_dir={'': 'src'},
     packages=['dentist'],
     scripts=['scripts/dentist'],
-    data_files=[],
+    data_files=[('/etc/logrotate.d', ['logrotate/dentist'])],
 )
