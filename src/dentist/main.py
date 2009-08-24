@@ -31,7 +31,7 @@ def main():
     options, args = parse()
 
     log_kwargs = {
-        'level': logging.DEBUG,
+        'level': logging.INFO,
         'format': '%(asctime)-15s %(levelname)-8s %(message)s',
     }
 
@@ -53,15 +53,21 @@ def main():
     error_logs = map(os.path.abspath, error_logs)
     error_logs = set(error_logs)
 
-    if not options.output_dir:
+    # Set the output directory of the user's logs
+    if options.output_dir:
         dentist.LogReader.set_output_directory(options.output_dir)
 
     poller = Poller()
+
+    # Setup the log readers
+    # Add the customized prefixes
     clr = dentist.CombinedLogReader
     clr.add_prefix(*options.prefixes)
+    # Set the root of the home directories
     elr = dentist.ErrorLogReader
     elr.configure(homedir_root=options.parent_user_dir)
 
+    # Create the list of files and log the set of their directories.
     fws = []
     directories = set()
     for f in access_logs:

@@ -8,6 +8,7 @@ class Poller(object):
     """Watches file descriptors using poll(2)"""
 
     def __init__(self):
+        """Create a polling object and that keeps track."""
         self.poller = select.poll()
         self.all = {}
 
@@ -30,6 +31,7 @@ class Poller(object):
                     logging.debug('ready for %d' % fd)
                     self.all[fd].read_line()
         except select.error, e:
+            # poll(2) was interrupted because of SIGIO
             if e[0] != 4:
                 raise
 
