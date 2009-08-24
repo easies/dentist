@@ -77,6 +77,8 @@ def main():
         directories.add(os.path.dirname(f))
         fws.append(FileWatcher(f, elr, poller))
 
+    logging.debug('%s' % str(directories))
+
     dw = DirWatcher(directories, fws)
 
     if options.daemonize:

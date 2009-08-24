@@ -55,6 +55,7 @@ class DirWatcher(object):
             fcntl.fcntl(d, fcntl.F_NOTIFY,
                         (fcntl.DN_MODIFY | fcntl.DN_DELETE | fcntl.DN_RENAME |
                          fcntl.DN_CREATE | fcntl.DN_MULTISHOT))
+            logging.debug('Directory %s added to be watched.' % path)
 
         if fws is not None:
             self.fws = fws
@@ -112,18 +113,18 @@ class FileWatcher(object):
 
         user = self.reader.check_line(line)
         if user:
-            self.write_to_user(user, line, self.path)
+            self.write_to_user(user, line, self.reader.output_directory)
 
     def write_to_user(self, user, line, path):
         logging.debug('Writing to %s : %s' % (user.pw_name, line))
-        dir_name = os.path.dirname(path)
-        basename = os.path.basename(path)
+        dir_name = os.path.abspath(path)
+        basename = os.path.basename(self.path)
         userpath = os.path.join(dir_name, '%s_%s' % (user.pw_name, basename))
-
         # XXX cache/poll the open files?
         open(userpath, 'a').write(line)
-
         logging.debug('Written to %s' % user.pw_name)
+        os.chown(userpath, user.pw_uid, user.pw_gid)
+        os.chmod(userpath, 0600)
 
     def disable(self):
         try:
