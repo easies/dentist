@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from distutils.core import setup
+from distutils.core import setup, Extension
 
 setup(
     name='Dentist',
@@ -9,6 +9,8 @@ setup(
     author='Alex Lee',
     author_email='lee@ccs.neu.edu',
     url='',
+    ext_package='dentist',
+    ext_modules=[Extension('_inotify', ['src/dentist/_inotify.c'])],
     package_dir={'': 'src'},
     packages=['dentist'],
     scripts=['scripts/dentist'],
