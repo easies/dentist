@@ -1,12 +1,8 @@
 cdef extern from "unistd.h":
-    ctypedef unsigned int size_t
-    ctypedef int ssize_t
     ctypedef unsigned int uint32_t
-    ssize_t read(int fd, void *buf, size_t nbytes)
 
 
 cdef extern from "sys/inotify.h":
-    struct inotify_event
     int C_IN_ACCESS "IN_ACCESS"
     int C_IN_MODIFY "IN_MODIFY"
     int C_IN_ATTRIB "IN_ATTRIB"
@@ -33,42 +29,6 @@ cdef extern from "sys/inotify.h":
     int inotify_init()
     int inotify_add_watch(int, char *, uint32_t)
     int inotify_rm_watch(int, uint32_t)
-
-
-cdef extern from "sys/ioctl.h":
-    int ioctl(int fd, unsigned long request, ...)
-    unsigned long FIONREAD
-
-
-cdef extern from "Python.h":
-    object PyString_FromStringAndSize(char *, size_t len)
-    void *PyMem_Malloc(size_t)
-    void PyMem_Free(void *)
-
-
-def read_from_inotify(int fd):
-    cdef char *buf
-    cdef unsigned int queue_len
-    cdef ssize_t count
-
-    if ioctl(fd, FIONREAD, &queue_len) < 0:
-        return ''
-
-    if queue_len <= 0:
-        return ''
-
-    buf = <char *>PyMem_Malloc(queue_len)
-    if buf == NULL:
-        return ''
-
-    count = read(fd, buf, queue_len)
-    if count > 0:
-        s = PyString_FromStringAndSize(buf, count)
-    else:
-        s = ''
-
-    PyMem_Free(buf)
-    return s
 
 
 IN_ACCESS = C_IN_ACCESS

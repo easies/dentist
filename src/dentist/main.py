@@ -31,7 +31,7 @@ def main():
     options, args = parse()
 
     log_kwargs = {
-        'level': logging.DEBUG,
+        'level': logging.INFO,
         'format': '%(asctime)-15s %(levelname)-8s %(message)s',
     }
 
