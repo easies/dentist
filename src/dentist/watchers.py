@@ -2,173 +2,101 @@ import os
 import fcntl
 import select
 import logging
-
+import inotify
+from inotify import IN_DELETE_SELF, IN_MODIFY, IN_CREATE
 
 class Poller(object):
-    """Watches file descriptors using poll(2)"""
+    """Watch file descriptors using poll(2) (read-only)."""
 
     def __init__(self):
         """Create a polling object and that keeps track."""
         self.poller = select.poll()
         self.all = {}
 
-    def register(self, fw):
-        self.poller.register(fw.file, select.POLLIN)
-        self.all[fw.file.fileno()] = fw
+    def register(self, fd, callback):
+        self.poller.register(fd, select.POLLIN)
+        self.all[fd] = callback
 
-    def unregister(self, fw):
+    def unregister(self, fd):
         try:
-            self.poller.unregister(fw.file)
-            del self.all[fw.file.fileno()]
+            self.poller.unregister(fd)
+            del self.all[fd]
         except KeyError:
             # ignore fd's that weren't registered in the first place.
             pass
 
     def poll(self):
-        try:
-            for fd, event in self.poller.poll():
-                if event & select.POLLIN:
-                    logging.debug('ready for %d' % fd)
-                    self.all[fd].read_line()
-        except select.error, e:
-            # poll(2) was interrupted because of SIGIO
-            if e[0] != 4:
-                raise
+        for fd, event in self.poller.poll():
+            if event & select.POLLIN:
+                logging.debug('ready for %d' % fd)
+                self.all[fd]()
 
 
-class DirWatcher(object):
-    signal_registered = False
+class Notifier(object):
 
-    def __init__(self, paths, fws=None):
-        import signal
-        if not self.__class__.signal_registered:
-            self.__class__.signal_registered = True
-            signal.signal(signal.SIGIO, self.handler)
+    def __init__(self):
+        self.inotify = inotify.Inotify()
+        self.all = {}
 
-        self.directories = []
+    def add_log_notify(self, ln):
+        wd = self.inotify.add_watch(ln.path,
+                                    IN_DELETE_SELF | IN_MODIFY | IN_CREATE)
+        self.all[wd] = ln.handler
 
-        # Watch all given directories for changes.
-        for path in paths:
-            d = os.open(path, os.O_RDONLY)
-            self.directories.append(d)
-            fcntl.fcntl(d, fcntl.F_SETSIG, signal.SIGIO)
-            fcntl.fcntl(d, fcntl.F_NOTIFY,
-                        (fcntl.DN_MODIFY | fcntl.DN_DELETE | fcntl.DN_RENAME |
-                         fcntl.DN_CREATE | fcntl.DN_MULTISHOT))
-            logging.debug('Directory %s added to be watched.' % path)
-
-        if fws is not None:
-            self.fws = fws
-        else:
-            self.fws = []
-
-    def add_file_watcher(self, fw):
-        self.fws.append(fw)
-
-    def handler(self, signum, frame):
-        logging.debug('A file changed.')
-        # XXX queue this action
-        for fw in self.fws:
-            fw.check()
+    def handler(self):
+        self.inotify.read_into_buffer()
+        event = self.inotify.get_event()
+        if event:
+            self.all[event.wd](event)
 
 
-class FileWatcher(object):
+class LogNotify(object):
 
-    def __init__(self, path, reader, poller):
-        self.reader = reader
-        self.poller = poller
+    def __init__(self, path, reader):
         self.path = os.path.abspath(path)
-        self.enabled = False
+        self.reader = reader
         try:
-            self.file = open(self.path, 'rb')
-            st = os.fstat(self.file.fileno())
-            self.last = st.st_size
-            self.current = st.st_size
-            # Start from the end.
-        except IOError:
-            self.file = None
-            self.last = 0
-            self.current = 0
-            # The file does not exist yet.
-
-        self.check()
-
-    def read_line(self):
-        if not self.enabled:
-            return
-        self.last = self.current
-        line = self.file.readline()
-        self.current = self.file.tell()
-
-        logging.debug('%d %d' % (self.last, self.current))
-
-        if not line or self.current == self.last:
-            # EOF
-            logging.debug('EOF encountered, disabling.')
-            self.enabled = False
-            self.poller.unregister(self)
-            return
-
-        logging.debug('line: %s' % line.strip())
-
-        user = self.reader.check_line(line)
-        if user:
-            self.write_to_user(user, line, self.reader.output_directory)
-
-    def write_to_user(self, user, line, path):
-        logging.debug('Writing to %s : %s' % (user.pw_name, line))
-        dir_name = os.path.abspath(path)
-        basename = os.path.basename(self.path)
-        userpath = os.path.join(dir_name, '%s_%s' % (user.pw_name, basename))
-        # XXX cache/poll the open files?
-        open(userpath, 'a').write(line)
-        logging.debug('Written to %s' % user.pw_name)
-        os.chown(userpath, user.pw_uid, user.pw_gid)
-        os.chmod(userpath, 0600)
-
-    def disable(self):
-        try:
-            self.file.close()
-        except (OSError, AttributeError):
-            pass
-        self.file = None
-        self.current = 0
-        self.last = 0
-        self.enabled = False
-
-    def enable(self):
-        self.file = open(self.path, 'rb')
-        self.poller.register(self)
-        self.current = 0
-        self.last = 0
-        self.enabled = True
-
-    def check(self):
-        try:
-            # Check if the file exists.
             st = os.stat(self.path)
+            self.file = open(self.path, 'rb')
         except OSError:
-            # The file does not exist, disable.
-            self.disable()
+            self.file = None
             return
+        self.file.seek(st.st_size)
+        self.last = st.st_size
 
-        if self.file is None:
-            # The file previously did not exist.
-            logging.debug('New file %s, enabling.' % self.path)
-            self.enable()
-            return
+    def output_file(self, user):
+        d = self.reader.output_directory
+        f = '%s_%s' % (user.pw_name, os.path.basename(self.path))
+        return os.path.join(d, f)
 
-        if st.st_size < self.current:
-            # The size of the file shrunk from the last place we read.
-            logging.debug('File %s shrunk, rewinding.' % self.path)
-            self.current = 0
-            self.last = 0
+    def in_delete(self):
+        self.file.close()
+        self.last = 0
 
-        self.file.seek(self.current)
+    def in_modify(self):
+        st = os.stat(self.path)
+        while self.last < st.st_size:
+            line = self.file.readline()
+            user = self.reader.check_line(line)
+            if user:
+                output = self.output_file(user)
+                open(output, 'a').write(line)
+                os.chmod(output, 400)
+                os.chown(output, user.pw_uid, user.pw_gid)
+            self.last += len(line)
 
-        if not self.enabled:
-            self.poller.register(self)
-            self.enabled = True
+    def in_create(self):
+        self.file = open(self.path, 'rb')
+        self.last = 0
+
+    def handler(self, event):
+        logging.debug(event)
+        if event.mask & inotify.IN_DELETE_SELF:
+            self.in_delete()
+        elif event.mask & inotify.IN_MODIFY:
+            self.in_modify()
+        elif event.mask & inotify.IN_CREATE:
+            self.in_create()
 
 
 if __name__ == '__main__':

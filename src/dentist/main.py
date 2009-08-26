@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import dentist
-from watchers import FileWatcher, DirWatcher, Poller
+from watchers import LogNotify, Notifier, Poller
 import logging
 import os
 import sys
@@ -23,7 +23,7 @@ def parse():
     parser.add_option('-o', '--output_dir', dest='output_dir',
                       default=None)
     parser.add_option('-l', '--log_file', dest='log_file', metavar='PATH',
-                      default='/var/log/dentist.log')
+                      default=None)
     return parser.parse_args()
 
 
@@ -31,7 +31,7 @@ def main():
     options, args = parse()
 
     log_kwargs = {
-        'level': logging.INFO,
+        'level': logging.DEBUG,
         'format': '%(asctime)-15s %(levelname)-8s %(message)s',
     }
 
@@ -67,19 +67,16 @@ def main():
     elr = dentist.ErrorLogReader
     elr.configure(homedir_root=options.parent_user_dir)
 
+    notifier = Notifier()
+
     # Create the list of files and log the set of their directories.
     fws = []
-    directories = set()
     for f in access_logs:
-        directories.add(os.path.dirname(f))
-        fws.append(FileWatcher(f, clr, poller))
+        notifier.add_log_notify(LogNotify(f, clr))
     for f in error_logs:
-        directories.add(os.path.dirname(f))
-        fws.append(FileWatcher(f, elr, poller))
+        notifier.add_log_notify(LogNotify(f, elr))
 
-    logging.debug('%s' % str(directories))
-
-    dw = DirWatcher(directories, fws)
+    poller.register(notifier.inotify.fileno(), notifier.handler)
 
     if options.daemonize:
         from daemonize import daemonize
