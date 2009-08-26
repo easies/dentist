@@ -70,7 +70,7 @@ def main():
     notifier = Notifier()
 
     # Create the list of files and log the set of their directories.
-    fws = []
+    directories = set()
     for f in access_logs:
         notifier.add_log_notify(LogNotify(f, clr))
     for f in error_logs:

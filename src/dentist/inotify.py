@@ -76,7 +76,7 @@ class Inotify(object):
         return _inotify.rm_watch(self.__fd, wd)
 
     def read_into_buffer(self):
-        self.__buffer += _inotify.read_from_inotify(self.__fd)
+        self.__buffer += os.read(self.__fd, 4096)
 
     def get_event(self):
         """
@@ -106,7 +106,7 @@ class Inotify(object):
             return
         wd, mask, cookie, length = struct.unpack('iIII', self.__buffer[0:16])
 
-        if 16 + length >= buffer_len:
+        if 16 + length <= buffer_len:
             name = self.__buffer[16:16+length].rstrip('\0')
             self.__buffer = self.__buffer[16+length:]
             return Event(wd, mask, cookie, name)
