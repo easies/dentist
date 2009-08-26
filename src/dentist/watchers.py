@@ -37,15 +37,17 @@ class Notifier(object):
     def __init__(self):
         self.inotify = inotify.Inotify()
         self.all = {}
-        self.all_directories = set()
+        self.all_directories = {}
 
     def add_log_notify(self, ln):
         dir_name = os.path.dirname(ln.path)
         base_name = os.path.basename(ln.path)
-        if not dir_name in self.all_directories:
+        if not dir_name in self.all_directories.keys():
             wd = self.inotify.add_watch(dir_name, ln.__class__.MASK)
+            self.all_directories[dir_name] = wd
+        else:
+            wd = self.all_directories[dir_name]
         self.all[(wd, base_name)] = ln.handler
-        self.all_directories.add(dir_name)
 
     def handler(self):
         self.inotify.read_into_buffer()
@@ -98,7 +100,7 @@ class LogNotify(object):
                 open(output, 'a').write(line)
                 logging.debug('%s : wrote to user : %s ...' % 
                               (user.pw_name, line[:50]))
-                os.chmod(output, 400)
+                os.chmod(output, 0400)
                 os.chown(output, user.pw_uid, user.pw_gid)
             self.last += len(line)
 
