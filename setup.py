@@ -13,6 +13,6 @@ setup(
     ext_modules=[Extension('_inotify', ['dentist/_inotify.c'])],
     packages=['dentist'],
     scripts=['scripts/dentist'],
-    data_files=[('/etc/logrotate.d', ['logrotate/dentist']),
-                ('/etc/init.d', ['init/dentist'])],
+#    data_files=[('/etc/logrotate.d', ['logrotate/dentist']),
+#                ('/etc/init.d', ['init/dentist'])],
 )
