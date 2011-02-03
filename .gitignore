@@ -3,3 +3,9 @@
 *.o
 *.so
 build
+build-stamp
+configure-stamp
+env
+debian/dentist*
+debian/dirs
+debian/files

@@ -1,0 +1,13 @@
+Source: dentist
+Section: python
+Priority: extra
+Maintainer: Alex Lee <lee@ccs.neu.edu>
+Build-Depends: debhelper (>= 7), python, python-support
+Standards-Version: 3.8.1
+Homepage: 
+
+Package: dentist
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, python
+Description: Log monitoring for cgibox.
+ Log monitoring and distribution for cgibox.
