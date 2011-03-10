@@ -9,8 +9,6 @@ setup(
     author='Alex Lee',
     author_email='lee@ccs.neu.edu',
     url='',
-    ext_package='dentist',
-    ext_modules=[Extension('_inotify', ['dentist/_inotify.c'])],
     packages=['dentist'],
     scripts=['scripts/dentist'],
 #    data_files=[('/etc/logrotate.d', ['logrotate/dentist']),

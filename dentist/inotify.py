@@ -1,6 +1,6 @@
 """Wrapper for inotify(7)"""
 
-import _inotify
+from . import _inotify
 import struct
 import os
 import fcntl

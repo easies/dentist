@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
-import dentist
-from watchers import LogNotify, Notifier, Poller
+from . import dentist
+from .watchers import LogNotify, Notifier, Poller
 import logging
 import os
 import sys
@@ -48,10 +48,8 @@ def main():
         return 1
 
     # Make the list into a set, so we don't duplicate
-    access_logs = map(os.path.abspath, access_logs)
-    access_logs = set(access_logs)
-    error_logs = map(os.path.abspath, error_logs)
-    error_logs = set(error_logs)
+    access_logs = set(map(os.path.abspath, access_logs))
+    error_logs = set(map(os.path.abspath, error_logs))
 
     # Set the output directory of the user's logs
     if options.output_dir:
@@ -79,7 +77,7 @@ def main():
     poller.register(notifier.inotify.fileno(), notifier.handler)
 
     if options.daemonize:
-        from daemonize import daemonize
+        from .daemonize import daemonize
         daemonize()
 
     try:

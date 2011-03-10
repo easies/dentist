@@ -2,8 +2,9 @@ import os
 import fcntl
 import select
 import logging
-import inotify
-from inotify import IN_DELETE, IN_MODIFY, IN_CREATE, IN_ALL_EVENTS
+from . import inotify
+from .inotify import IN_DELETE, IN_MODIFY, IN_CREATE, IN_ALL_EVENTS
+
 
 class Poller(object):
     """Watch file descriptors using poll(2) (read-only)."""
@@ -42,7 +43,7 @@ class Notifier(object):
     def add_log_notify(self, ln):
         dir_name = os.path.dirname(ln.path)
         base_name = os.path.basename(ln.path)
-        if not dir_name in self.all_directories.keys():
+        if not dir_name in list(self.all_directories.keys()):
             wd = self.inotify.add_watch(dir_name, ln.__class__.MASK)
             self.all_directories[dir_name] = wd
         else:
@@ -100,7 +101,7 @@ class LogNotify(object):
                 open(output, 'a').write(line)
                 logging.debug('%s : wrote to user : %s ...' % 
                               (user.pw_name, line[:50]))
-                os.chmod(output, 0400)
+                os.chmod(output, 0o400)
                 os.chown(output, user.pw_uid, user.pw_gid)
             self.last += len(line)
 
